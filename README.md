@@ -23,7 +23,7 @@ Three files are provided, namely
 
 
 ## Acknowledgments
-The authors thank Alice Schwarze and Jean-Gabriel Young for their time and valuable suggestions.
+The authors thank Alice Schwarze and Jean-Gabriel Young for useful discussions and valuable suggestions.
 
 ## Credits
 Please cite the accompanying paper if you use our codes in your study.
