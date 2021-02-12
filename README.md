@@ -6,7 +6,7 @@ _Measuring topological descriptors of complex networks under uncertainty_
 
 Sebastian Raimondo and Manlio De Domenico
 
-Physical Review E 103, 022311 – (2021)
+Physical Review E 103, 022311 – (2021) ([Direct link](https://journals.aps.org/pre/abstract/10.1103/PhysRevE.103.022311]))
 
 ## Introduction
 
