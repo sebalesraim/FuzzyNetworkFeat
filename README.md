@@ -15,11 +15,9 @@ Revealing the structural features of a complex system from the observed collecti
 ## Description
 Three files are provided, namely
 
-`FuzzyAnalysisLib.R` which contains the functions for the computation of the fuzzy network descritpors
+`FuzzyAnalysisLib.R` which contains the functions for the computation of the fuzzy network descritpors (and a set of ancillary functions)
 
 `MinimumPosteriorProb.R` which is used to compute the minimum posterior probability of existene of the edges, given the associated _p_-value (see the section II.B of the paper).
-
-`Functions` is a set of ancillary functions for the other codes.
 
 
 ## Acknowledgments

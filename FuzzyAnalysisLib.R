@@ -1,20 +1,226 @@
-# Fuzzy Degree ------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-# This function compute the fuzzy degree for the nodes of a network
-# INPUT --> FuzzyProb = matrix of probabilities of existence
-#       --> analytic = T if the fuzzy degree must be from Poisson-Distribution rather than sampling FuzzyProb
-#       --> Nsam --> numeber of random sampling from the FuzzyProb (if analytic==F)
-# OUTPUT --> Pdnode = Dataframe with probabilities of a node having a certain degree (degrees on rows and nodes on columns)
+# This script contains the functions to compute the fuzzy descriptors for the nodes of an undirected network
+# INPUT  --> P = matrix of probabilities of existence
+#        --> analytic = T if the fuzzy degree must be from Poisson-Distribution rather than sampling FuzzyProb
+#        --> Nsamples = number of random sampling from the FuzzyProb (if analytic==F)
+# OUTPUT --> Pdnode = Dataframe with probabilities of a node having a certain value of the descriptor
 
 library(poibin)
-source('./Functions/randomat.R')
 
-get_fuzzy_Degree <- function(P, analytic=T, Wsample=NULL){
+####################################################################################################################################
+#~~~~~~~~~~~~~~~~~ ANCILLARY FUNCTIONS ~~~~~~~~~~~~~~~~~#
+####################################################################################################################################.
+
+# Functions to compute different types of random matrices.
+
+# Sample 0-1 values from a given distribution
+sample01 <- function(N , distr , param , normalize01=F ){
+  if( !(distr %in% c('rand.adj','rand.adj.gnp','omog','unif','beta','norm','lnorm','poisson'))){stop("Non ammissible distribution. Choose among 'rand.adj','rand.adj.gnp','omog','unif', beta','norm','lnorm','poisson'")}
+  
+  switch(distr,
+         
+         rand.adj = {         
+           x = sample(c(0,1) , N , replace = T)
+         },
+         
+         rand.adj.gnp = {
+           if(length(param)!=1){stop("Wrong number of parameter: Insert threshold p")}
+           y = runif( N )
+           x = numeric(N)
+           x[which(y < param)] = 1
+         },
+         
+         omog = {
+           if(length(param)!=1){stop("The parameter must be 0<p<1")}
+           x = rep(param , N)
+         },
+         
+         unif = {
+           if(length(param)!=2){stop("Wrong number of parameter (insert min and max bounds of Uniform Distribution")}
+           x = runif( N )
+         },
+         
+         beta = {
+           if(length(param)==1){stop("Wrong number of parameter")}
+           x = rbeta( N , param[1] , param[2])
+         },
+         
+         norm = {
+           if(length(param)==1){stop("Wrong number of parameter")}
+           x = rnorm(N,param[1],param[2])
+         },
+         
+         lnorm = {
+           if(length(param)==1){stop("Wrong number of parameter")}
+           x = rlnorm(N,param[1],param[2])
+         },
+         
+         poisson = {
+           if(length(param)!=1){stop("Only one parameter is required")}
+           
+           x = rpois(N,param)
+           
+         }
+         
+  )
+  
+  p <- x
+  
+  if(normalize01==T & (distr=='norm'|distr=='lnorm'|distr=='poisson')){p <- (x-min(x))/(max(x)-min(x))} #ci sarà 0 e 1...
+  
+  return( p )
+  
+}
+
+#Generate Random Matrices (sym==symmetric , loop==diag!=0 , wigner==gaussian normalized matrix)
+#INPUT: N = numel 
+#       distr = selected distribution among 'rand.adj','rand.adj.gnp','omog','unif', beta','norm','lnorm'"
+#       param = parameter of the distribution
+
+upper <- function(v){
+  n <- (1+sqrt(1+8*length(v)))/2
+  mat <- matrix(0,n,n)
+  mat[upper.tri(mat, diag=FALSE)] <- v
+  return(mat)
+}
+
+lower <- function(v){
+  n <- (1+sqrt(1+8*length(v)))/2
+  mat <- matrix(0,n,n)
+  mat[lower.tri(mat, diag=FALSE)] <- v
+  return(mat)
+}
+
+symat <- function(v){
+  n <- (1+sqrt(1+8*length(v)))/2
+  mat <- matrix(0,n,n)
+  mat[lower.tri(mat, diag=FALSE)] <- v
+  mat[upper.tri(mat)] <-  t(mat)[upper.tri(mat)]
+  return(mat)
+}
+
+random_sym_mat <- function(N,distr,param,normalize01=F){
+  A <- matrix(0, N, N)
+  upperN <- (N^2-N)/2
+  
+  x <- sample01(upperN,distr,param,normalize01)
+  A <- symat(x)
+  
+  return(A)
+}
+
+random_sym_given_mat <- function(N,vector){
+  A <- matrix(0, N, N)
+  upperN <- (N^2-N)/2
+  
+  x <- sample(vector,upperN,replace = T)
+  A <- symat(x)
+  
+  return(A)
+}
+
+
+random_sym_loop_mat <- function(N,distr,param,normalize01=F){
+  A <- matrix(0, N, N)
+  upperN <- (N^2-N)/2
+  
+  x <- sample01(upperN,distr,param,normalize01)
+  diagA <- sample01(N,distr,param,normalize01)
+  A <- upper(x) + lower(x) + diag(diagA)
+  
+  return(A)
+}
+
+randomat <- function(N,distr,param,normalize01=F){
+  #each p_ij one with probability p sampled from U(0,1)
+  A <- sample01(N^2,distr,param,normalize01) %>% matrix(N,N)
+  
+  return(A)
+}
+
+randomat_noloop <- function(N,distr,param,normalize01=F){
+  #each p_ij one with probability p sampled from U(0,1)
+  A <- sample01(N^2,distr,param,normalize01) %>% matrix(N,N)
+  diag(A)=0
+  
+  return(A)
+}
+
+randomat_rect <- function(N,M,distr,param,normalize01=F){
+  #each p_ij one with probability p sampled from U(0,1)
+  A <- sample01(N*M,distr,param,normalize01) %>% matrix(N,M)
+  return(A)
+}
+
+random_diff_beta <- function(N,a.vec,b.vec){
+  
+  upperN <- (N^2-N)/2
+  A <- matrix(0, N, N)
+  param.list = cbind( a.vec , b.vec )
+  
+  x <- lapply(1:upperN, function(t) rbeta( 1 , param.list[t,1] , param.list[t,2]) ) %>% unlist 
+  
+  A <- symat(x)
+  Ex <- a.vec/(a.vec+b.vec)
+  
+  return(list(A=A,Ex=Ex))
+  
+}
+
+random_diff_norm <- function(N,param){
+  
+  upperN <- (N^2-N)/2
+  A <- matrix(0, N, N)
+  a <- numeric()
+  b <- numeric()
+  x <- numeric()
+  Ex <- numeric()
+  
+  for(i in 1:upperN){
+    
+    a[i] = sample(param[,1],1)
+    b[i] = sample(param[,2],1)
+    x[i] <- rnorm(1,a[i],b[i])
+    Ex[i] <- a[i]
+  }
+  A <- x %>% matrix(.,N,N)
+  
+  return(list(Ex=Ex,A=A))
+}
+
+# Thresholding probability/weighted adjacency matrix
+mathresh <- function(W,threshold=0.75, type='mag', diag.value=NULL){
+  
+  if(type=='mag'){wnew <- (W > threshold)*1}
+  if(type=='min'){wnew <- (W < threshold)*1}
+  if(!is.null(diag.value)){ diag(wnew) <- diag.value }
+  return(wnew)
+  
+}  
+
+# Sampling a probability matrix, obtaining a list of binary adjacency matrix
+sampling.P <- function(P, Nsamples){
+  if(dim(P)[1] != dim(P)[2] | is.null(dim(P)[1])) {stop('The probability matrix is not square')}
+  N <- dim(P)[1]
+  lapply(1:Nsamples, function(x) (random_sym_mat(N,'unif', c(0,1) ) < P)*1 )
+}
+
+####################################################################################################################################.
+#~~~~~~~~~~~~~~~~~ FUZZY FRAMEWORK FUNCTIONS ~~~~~~~~~~~~~~~~~#
+####################################################################################################################################.
+
+# Fuzzy Degree --------
+# This function compute the fuzzy degree for the nodes of a network
+# INPUT  --> P = matrix of probabilities of existence
+#        --> analytic = T if the fuzzy degree must be from Poisson-Distribution rather than sampling FuzzyProb
+#        --> Asample = List of sampled adjacency matrices (N x N each)
+# OUTPUT --> Pdnode = Dataframe with probabilities of a node having a certain degree (degrees on rows and nodes on columns)
+
+get_fuzzy_Degree <- function(P, analytic=T, Asample=NULL){
   
   if(analytic) {
     N <- dim(P)[1]
   } else{
-    N <- dim(Wsample[[1]])[1]
+    N <- dim(Asample[[1]])[1]
   }
   
   Pdnode <- matrix(NA,N,N)
@@ -31,7 +237,7 @@ get_fuzzy_Degree <- function(P, analytic=T, Wsample=NULL){
   } else{
     # NUMERIC (without poibin library)
     cat('Sampling Done!\n')
-    simuls.node <- lapply(Wsample, function(x) rowSums(x)) # sum the "successes" for each node (degree)
+    simuls.node <- lapply(Asample, function(x) rowSums(x)) # sum the "successes" for each node (degree)
     n.links <- matrix(unlist(simuls.node) , Nsam , N , byrow = T) # matrix of degree for each node (column) for each sample (row)
     
     # Pdnode_table <- apply(n.links, 2, function(x) table(x)/Nsam)
@@ -51,19 +257,22 @@ get_fuzzy_Degree <- function(P, analytic=T, Wsample=NULL){
 
 # Fuzzy Clustering Coefficient ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-# Given a network with N nodes, this function compute NUMERICALLY for each node, the probability that the (local) clustering coefficient is equal to a certain value. 
+# Given a network with N nodes, this function computes for each node, the probability that the (local) clustering coefficient is 
+# equal to the value in the support. 
 # This function takes the sampled adjacency matrices and computes the transitivity for each node of each sampled network. 
 # Then, it compute the frequency of the transitivity values for every node.
 
 # INPUT: 
-# Wsample = list of sampled adjacency matrix (NxN each)
+# Asample = list of sampled adjacency matrix (N x N each)
+# OUTPUT:
+# sim.cl.pr = Probability of a node having clustering coefficent equal to values in the support
 
 library(igraph)
-get_fuzzy_Clustering_numerical <- function(Wsample){
+get_fuzzy_Clustering_numerical <- function(Asample){
   
-  N <- dim(Wsample[[1]])[1]
-  Nsim <- length(Wsample)
-  sim.cl <- lapply( Wsample , function(x) transitivity( graph_from_adjacency_matrix( x, mode = 'undirected'), 'local') )
+  N <- dim(Asample[[1]])[1]
+  Nsim <- length(Asample)
+  sim.cl <- lapply( Asample , function(x) transitivity( graph_from_adjacency_matrix( x, mode = 'undirected'), 'local') )
   sim.cl.df <- data.frame( matrix(sim.cl %>% unlist, ncol=N, byrow = T) ); names(sim.cl.df) <- 1:N #paste('n',seq(1,N),sep='')
   
   #apply(sim.cl.df,2,function(x) table(x,useNA = 'ifany') )
@@ -111,14 +320,18 @@ clustering_theoretical_support <- function(N){
 # This function takes the sampled adjacency matrices and computes the number of components for each node of each sampled network. 
 # Then, it compute the frequency of the networks actually connected.
 # NB at the end, the probabilities does not sum (necessarely) to one! (It does if also the other components are considered)
+# This function compute the fuzzy degree for the nodes of a network
+#
+# INPUT  --> Asample = List of sampled adjacency matrices (N x N each)
+# OUTPUT --> Pdnode = Dataframe with probabilities of the network of being connected with the corresponding number of edges
 
-get_fuzzy_Connectivity_numerical <- function(Wsample, doPlot=T){
+get_fuzzy_Connectivity_numerical <- function(Asample, doPlot=F){
   
-  N <- dim(Wsample[[1]])[1]
-  Nsim <- length(Wsample)
+  N <- dim(Asample[[1]])[1]
+  Nsim <- length(Asample)
   m <- choose(N,2)
-  sim_nedges <- lapply(Wsample, function(x) x[upper.tri(x)] %>% sum ) %>% unlist # number o edges for each sample
-  sim_nCC <- lapply( Wsample , function(x) count_components( graph_from_adjacency_matrix(x, mode = 'undirected')) ) %>% unlist # number of components connected with sim_nedges number of edges
+  sim_nedges <- lapply(Asample, function(x) x[upper.tri(x)] %>% sum ) %>% unlist # number o edges for each sample
+  sim_nCC <- lapply( Asample , function(x) count_components( graph_from_adjacency_matrix(x, mode = 'undirected')) ) %>% unlist # number of components connected with sim_nedges number of edges
   
   dp <- data.frame(sim_nedges, sim_nCC)
   simPccTot <- as.matrix(table(dp)/Nsim)
