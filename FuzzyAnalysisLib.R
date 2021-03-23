@@ -326,8 +326,6 @@ clustering_theoretical_support <- function(N){
 
 get_fuzzy_Connectivity_numerical <- function(Asample, doPlot=F){
   
-  Nsim <- length(Asample)
-
   dp <- 
     lapply( Asample , function(x){
       g <- graph_from_adjacency_matrix(x, mode = 'undirected')
@@ -339,7 +337,7 @@ get_fuzzy_Connectivity_numerical <- function(Asample, doPlot=F){
     as.data.frame # number n.CC of components connected with n.edges number of edges
   
   simPcc <- 
-    as.data.frame(table(dp)/Nsim) %>% 
+    as.data.frame(table(dp)/length(Asample)) %>% 
     dplyr::filter(n.CC==1) %>% 
     dplyr::select(n.edges, Freq)
 
