@@ -316,28 +316,33 @@ clustering_theoretical_support <- function(N){
 
 # Fuzzy Connectivity ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-# Given a network with N nodes, this function compute NUMERICALLY for each node, the probability that the network is connected with a certain number of edges. 
+# Given an undirected network with N nodes, this function compute NUMERICALLY for each node, the probability that the network is connected with a certain number of edges. 
 # This function takes the sampled adjacency matrices and computes the number of components for each node of each sampled network. 
 # Then, it compute the frequency of the networks actually connected.
-# NB at the end, the probabilities does not sum (necessarely) to one! (It does if also the other components are considered)
-# This function compute the fuzzy degree for the nodes of a network
+# NB at the end, the probabilities does not sum (necessarily) to one! (It does if also the other components are considered)
 #
 # INPUT  --> Asample = List of sampled adjacency matrices (N x N each)
-# OUTPUT --> Pdnode = Dataframe with probabilities of the network of being connected with the corresponding number of edges
+# OUTPUT --> simPcc = Dataframe with probabilities of the network of being connected with the corresponding number of edges
 
 get_fuzzy_Connectivity_numerical <- function(Asample, doPlot=F){
   
-  N <- dim(Asample[[1]])[1]
   Nsim <- length(Asample)
-  m <- choose(N,2)
-  sim_nedges <- lapply(Asample, function(x) x[upper.tri(x)] %>% sum ) %>% unlist # number o edges for each sample
-  sim_nCC <- lapply( Asample , function(x) count_components( graph_from_adjacency_matrix(x, mode = 'undirected')) ) %>% unlist # number of components connected with sim_nedges number of edges
+
+  dp <- 
+    lapply( Asample , function(x){
+      g <- graph_from_adjacency_matrix(x, mode = 'undirected')
+      n.edges <- length(E(g))
+      n.CC <- count_components(g) 
+      return( cbind(n.edges, n.CC) )
+    }) %>% 
+    do.call(rbind,.) %>% 
+    as.data.frame # number n.CC of components connected with n.edges number of edges
   
-  dp <- data.frame(sim_nedges, sim_nCC)
-  simPccTot <- as.matrix(table(dp)/Nsim)
-  simPcc <- simPccTot[,1]
-  simPcc <- cbind('nedges'=as.numeric(names(simPcc)),'probability'=simPcc)
-  
+  simPcc <- 
+    as.data.frame(table(dp)/Nsim) %>% 
+    dplyr::filter(n.CC==1) %>% 
+    dplyr::select(n.edges, Freq)
+
   # if( length(simPcc)>2 & doPlot){
   #   plot( as.numeric(names(simPcc)), simPcc , type='b', pch=1, col='firebrick', xlim=c(0,m), main='Probability of existence of the Giant Component\n(Numerical)', sub = paste('N =',N), xlab = 'Number of edges', ylab='Probability')#,xaxt='n')
   #   legend('topright' , legend=c('Analytical','Numerical'), col=c('darkblue','firebrick'), lty=1, cex=0.6 , bty ='n' )
