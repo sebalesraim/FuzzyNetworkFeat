@@ -326,7 +326,7 @@ clustering_theoretical_support <- function(N){
 
 get_fuzzy_Connectivity_numerical <- function(Asample, doPlot=F){
   
-  dp <- 
+  dp <- # number n.CC of components connected with n.edges number of edges
     lapply( Asample , function(x){
       g <- graph_from_adjacency_matrix(x, mode = 'undirected')
       n.edges <- length(E(g))
@@ -334,19 +334,24 @@ get_fuzzy_Connectivity_numerical <- function(Asample, doPlot=F){
       return( cbind(n.edges, n.CC) )
     }) %>% 
     do.call(rbind,.) %>% 
-    as.data.frame # number n.CC of components connected with n.edges number of edges
+    as.data.frame 
   
   simPcc <- 
     as.data.frame(table(dp)/length(Asample)) %>% 
     dplyr::filter(n.CC==1) %>% 
     dplyr::select(n.edges, Freq)
-
+  
+  if (dim(simPcc)[1] > 0) {
+    simPcc$n.edges <- as.numeric(levels(simPcc$n.edges))
+    return(simPcc)
+  } else{
+    return(data.frame(n.edges = NA, Freq = NA))
+  }
+  
   # if( length(simPcc)>2 & doPlot){
   #   plot( as.numeric(names(simPcc)), simPcc , type='b', pch=1, col='firebrick', xlim=c(0,m), main='Probability of existence of the Giant Component\n(Numerical)', sub = paste('N =',N), xlab = 'Number of edges', ylab='Probability')#,xaxt='n')
   #   legend('topright' , legend=c('Analytical','Numerical'), col=c('darkblue','firebrick'), lty=1, cex=0.6 , bty ='n' )
   # }
-  
-  return(simPcc)
   
 }
 
